@@ -68,10 +68,6 @@ def create_user(
         return {"error": "Invalid API key"}, 401
     user_id = str(uuid4())
     metadata_s = ""
-    # for k, v in meta.items():
-    #     k = re.sub(r"""[^a-zA-Z0-9!?:,'" ]""", "", k)
-    #     v = re.sub(r"""[^a-zA-Z0-9!?:,'" ]""", "", str(v))
-    #     metadata_s += f"{k}={v};"
     metadata: typing.List[str] = meta.split(";")
     for item in metadata:
         if item.strip():
