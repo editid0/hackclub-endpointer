@@ -13,7 +13,7 @@ cursor.execute(
     """CREATE TABLE IF NOT EXISTS users (user_id TEXT PRIMARY KEY, name TEXT, meta TEXT, owner TEXT)"""
 )
 cursor.execute(
-    """CREATE TABLE IF NOT EXISTS balances(api_key TEXT, user_id TEXT, balance INTEGER)"""
+    """CREATE TABLE IF NOT EXISTS balances(api_key TEXT, user_id TEXT, balance INTEGER, balance_id TEXT PRIMARY KEY)"""
 )
 conn.commit()
 
@@ -51,7 +51,7 @@ def validate_key(api_key: str) -> bool:
 @app.get("/key")
 def validate_api_key(api_key: str) -> dict[str, bool]:
     """This endpoint checks if the API key is valid."""
-    is_valid = validate_api_key(api_key)
+    is_valid = validate_key(api_key)
     time.sleep(0.5)  # i added this time to make it so you can't brute force api keys
     if is_valid:
         return {"valid": True}
@@ -121,19 +121,127 @@ def get_user(
     return {"user_id": user[0], "name": user[1], "meta": user[2]}
 
 
+@app.put("/users/{user_id}")
+def update_user(
+    user_id: str,
+    request: Request,
+    name: typing.Optional[str] = None,
+    meta: str = "",
+) -> typing.Union[dict[str, str], tuple[dict[str, str], int]]:
+    """This endpoint updates a user's name or meta."""
+    api_key = get_key(request)
+    if not validate_key(api_key):
+        return {"error": "Invalid API key"}, 401
+    if meta:
+        metadata_s = ""
+        metadata: typing.List[str] = meta.split(";")
+        for item in metadata:
+            if item.strip():
+                k, v = item.split("=", 1) if "=" in item else (item, "")
+                k = re.sub(r"""[^a-zA-Z0-9!?:,'" ]""", "", k)
+                v = re.sub(r"""[^a-zA-Z0-9!?:,'" ]""", "", v)
+                metadata_s += f"{k}={v};"
+        metadata_s = metadata_s.rstrip(";")
+        if len(metadata_s) > 1000:
+            return {
+                "error": "Metadata too long, must be less than 1000 characters"
+            }, 400
+    if name:
+        if len(name) > 100:
+            return {"error": "Name too long, must be less than 100 characters"}, 400
+    if meta and not name:
+        cursor.execute(
+            "UPDATE users SET meta = ? WHERE user_id = ? AND owner = ?",
+            (metadata_s, user_id, api_key),
+        )
+    elif name and not meta:
+        cursor.execute(
+            "UPDATE users SET name = ? WHERE user_id = ? AND owner = ?",
+            (name, user_id, api_key),
+        )
+    elif name and meta:
+        if len(name) > 100:
+            return {"error": "Name too long, must be less than 100 characters"}, 400
+        if len(metadata_s) > 1000:
+            return {
+                "error": "Metadata too long, must be less than 1000 characters"
+            }, 400
+        cursor.execute(
+            "UPDATE users SET name = ?, meta = ? WHERE user_id = ? AND owner = ?",
+            (name, metadata_s, user_id, api_key),
+        )
+    conn.commit()
+    if cursor.rowcount == 0:
+        return {"error": "User not found"}, 404
+    return {"message": "User updated successfully"}
+
+
 @app.get("/balances")
 def get_balances(
     request: Request,
 ) -> typing.Union[list[dict[str, typing.Union[str, int]]], tuple[dict[str, str], int]]:
-    """This endpoint returns who owes who money, so if bob owes you like £50, it'll show bob £50, if you owe bob £40, it'll show bob -£40, if both, it'll show bob £10."""
+    """This endpoint returns who owes who money, so if bob owes you like £50, it'll show bob £50, if you owe bob £40, it'll show bob -£40, if both, it'll show both transactions."""
     api_key = get_key(request)
     if not validate_key(api_key):
         return {"error": "Invalid API key"}, 401
     cursor.execute("SELECT * FROM balances WHERE api_key = ?", (api_key,))
     balances = cursor.fetchall()
-    return [{"user_id": balance[1], "balance": balance[2]} for balance in balances]
+    return [
+        {"user_id": balance[1], "balance": balance[2], "balance_id": balance[3]}
+        for balance in balances
+    ]
 
 
-@app.get("/items/{item_id}")
-def read_item(item_id: int, q: typing.Union[str, None] = None):
-    return {"item_id": item_id, "q": q}
+@app.post("/balance")
+def add_balance(
+    user_id: str,
+    balance: int,
+    request: Request,
+) -> typing.Union[dict[str, str], tuple[dict[str, str], int]]:
+    """This endpoint adds a balance for a user."""
+    api_key = get_key(request)
+    if not validate_key(api_key):
+        return {"error": "Invalid API key"}, 401
+    balance_id = str(uuid4())
+    cursor.execute(
+        "INSERT INTO balances (api_key, user_id, balance, balance_id) VALUES (?, ?, ?, ?)",
+        (api_key, user_id, balance, balance_id),
+    )
+    conn.commit()
+    return {"message": "Balance added successfully", "balance_id": balance_id}
+
+
+@app.get("/balance/{balance_id}")
+def get_a_balance(
+    balance_id: str, request: Request
+) -> typing.Union[dict[str, typing.Any], tuple[dict[str, str], int]]:
+    """This endpoint returns a balance from the balance id."""
+    api_key = get_key(request)
+    if not validate_key(api_key):
+        return {"error": "Invalid API key"}, 401
+    cursor.execute(
+        "SELECT * FROM balances WHERE balance_id = ? AND api_key = ?",
+        (balance_id, api_key),
+    )
+    balance = cursor.fetchone()
+    if balance is None:
+        return {"error": "Balance not found"}, 404
+    return {"user_id": balance[1], "balance": balance[2], "balance_id": balance[3]}
+
+
+@app.delete("/balance/{balance_id}")
+def delete_balance(
+    balance_id: str, request: Request
+) -> typing.Union[dict[str, str], tuple[dict[str, str], int]]:
+    """This endpoint deletes a balance from the balance id."""
+    api_key = get_key(request)
+    if not validate_key(api_key):
+        return {"error": "Invalid API key"}, 401
+    cursor.execute(
+        "DELETE FROM balances WHERE balance_id = ? AND api_key = ?",
+        (balance_id, api_key),
+    )
+    conn.commit()
+    if cursor.rowcount == 0:
+        return {"error": "Balance not found"}, 404
+    return {"message": "Balance deleted successfully"}
