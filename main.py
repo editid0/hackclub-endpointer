@@ -31,7 +31,11 @@ def get_key(request: Request) -> str:
     return request.headers.get("X-API-Key", "")
 
 
-@app.post("/key")
+@app.post(
+    "/key",
+    summary="Generate API key",
+    description="This endpoint generates an API key for you to use.",
+)
 def generate_api_key() -> dict[str, str]:
     """This endpoint gives you an API key you can use to access the application."""
     api_key = str(uuid4())
@@ -48,7 +52,11 @@ def validate_key(api_key: str) -> bool:
     return result is not None
 
 
-@app.get("/key")
+@app.get(
+    "/key",
+    summary="Validate API key",
+    description="This endpoint checks if the API key is valid.",
+)
 def validate_api_key(api_key: str) -> dict[str, bool]:
     """This endpoint checks if the API key is valid."""
     is_valid = validate_key(api_key)
@@ -59,7 +67,11 @@ def validate_api_key(api_key: str) -> dict[str, bool]:
         return {"valid": False}
 
 
-@app.post("/users")
+@app.post(
+    "/users",
+    summary="Create a user",
+    description="This endpoint creates a user with a name and optional metadata.",
+)
 def create_a_user(
     name: str,
     request: Request,
@@ -91,7 +103,11 @@ def create_a_user(
     return {"user_id": user_id}
 
 
-@app.get("/users")
+@app.get(
+    "/users",
+    summary="Get all user's from your API key",
+    description="This endpoint returns all users associated with the API key.",
+)
 def get_all_users_from_key(
     request: Request,
 ) -> typing.Union[typing.List[dict[str, typing.Any]], tuple[dict[str, str], int]]:
@@ -104,7 +120,11 @@ def get_all_users_from_key(
     return [{"user_id": user[0], "name": user[1], "meta": user[2]} for user in users]
 
 
-@app.get("/users/{user_id}")
+@app.get(
+    "/users/{user_id}",
+    summary="Get a specific user by user id",
+    description="This endpoint returns a user from a user id.",
+)
 def get_specific_user(
     user_id: str, request: Request
 ) -> typing.Union[dict[str, typing.Any], tuple[dict[str, str], int]]:
@@ -121,7 +141,11 @@ def get_specific_user(
     return {"user_id": user[0], "name": user[1], "meta": user[2]}
 
 
-@app.put("/users/{user_id}")
+@app.put(
+    "/users/{user_id}",
+    summary="Update a user's name or metadata",
+    description="This endpoint updates a user's name or meta, if you only want to update one, don't pass the other one, if you want both, pass both.",
+)
 def update_a_user(
     user_id: str,
     request: Request,
@@ -176,7 +200,33 @@ def update_a_user(
     return {"message": "User updated successfully"}
 
 
-@app.get("/balances")
+@app.delete(
+    "/users/{user_id}",
+    summary="Delete a user",
+    description="This endpoint deletes a user by user id.",
+)
+def delete_a_user(
+    user_id: str, request: Request
+) -> typing.Union[dict[str, str], tuple[dict[str, str], int]]:
+    """This endpoint deletes a user by user_id."""
+    api_key = get_key(request)
+    if not validate_key(api_key):
+        return {"error": "Invalid API key"}, 401
+    cursor.execute(
+        "DELETE FROM users WHERE user_id = ? AND owner = ?",
+        (user_id, api_key),
+    )
+    conn.commit()
+    if cursor.rowcount == 0:
+        return {"error": "User not found"}, 404
+    return {"message": "User deleted successfully"}
+
+
+@app.get(
+    "/balances",
+    summary="Get all balances",
+    description="This endpoint returns all balances for the user associated with the API key.",
+)
 def get_api_key_balances(
     request: Request,
 ) -> typing.Union[list[dict[str, typing.Union[str, int]]], tuple[dict[str, str], int]]:
@@ -192,7 +242,11 @@ def get_api_key_balances(
     ]
 
 
-@app.post("/balances")
+@app.post(
+    "/balances",
+    summary="Add a balance for a user",
+    description="This endpoint adds a balance for a user, this is basically a transaction.",
+)
 def add_a_balance(
     user_id: str,
     balance: int,
@@ -211,7 +265,11 @@ def add_a_balance(
     return {"message": "Balance added successfully", "balance_id": balance_id}
 
 
-@app.get("/balances/{balance_id}")
+@app.get(
+    "/balances/{balance_id}",
+    summary="Get a specific balance by it's ID",
+    description="This endpoint returns a balance from the balance ID, which you can get from /balances.",
+)
 def get_a_balance(
     balance_id: str, request: Request
 ) -> typing.Union[dict[str, typing.Any], tuple[dict[str, str], int]]:
@@ -229,7 +287,11 @@ def get_a_balance(
     return {"user_id": balance[1], "balance": balance[2], "balance_id": balance[3]}
 
 
-@app.delete("/balances/{balance_id}")
+@app.delete(
+    "/balances/{balance_id}",
+    summary="Delete a user's balance",
+    description="This endpoint deletes a balance from the balance id, which you can get from /balances.",
+)
 def delete_a_balance(
     balance_id: str, request: Request
 ) -> typing.Union[dict[str, str], tuple[dict[str, str], int]]:
@@ -245,3 +307,25 @@ def delete_a_balance(
     if cursor.rowcount == 0:
         return {"error": "Balance not found"}, 404
     return {"message": "Balance deleted successfully"}
+
+
+@app.put(
+    "/balances/{balance_id}",
+    summary="Update a user's balance",
+    description="This endpoint updates a user's balance, you can only update the balance, not the user_id or balance_id.",
+)
+def update_a_balance(
+    balance_id: str, new_balance: int, request: Request
+) -> typing.Union[dict[str, str], tuple[dict[str, str], int]]:
+    """This endpoint updates a user's balance."""
+    api_key = get_key(request)
+    if not validate_key(api_key):
+        return {"error": "Invalid API key"}, 401
+    cursor.execute(
+        "UPDATE balances SET balance = ? WHERE balance_id = ? AND api_key = ?",
+        (new_balance, balance_id, api_key),
+    )
+    conn.commit()
+    if cursor.rowcount == 0:
+        return {"error": "Balance not found"}, 404
+    return {"message": "Balance updated successfully"}
