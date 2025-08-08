@@ -101,6 +101,23 @@ def get_users(
     return [{"user_id": user[0], "name": user[1], "meta": user[2]} for user in users]
 
 
+@app.get("/users/{user_id}")
+def get_user(
+    user_id: str, request: Request
+) -> typing.Union[dict[str, typing.Any], tuple[dict[str, str], int]]:
+    """This endpoint returns a user by user_id."""
+    api_key = get_key(request)
+    if not validate_key(api_key):
+        return {"error": "Invalid API key"}, 401
+    cursor.execute(
+        "SELECT * FROM users WHERE user_id = ? AND owner = ?", (user_id, api_key)
+    )
+    user = cursor.fetchone()
+    if user is None:
+        return {"error": "User not found"}, 404
+    return {"user_id": user[0], "name": user[1], "meta": user[2]}
+
+
 @app.get("/items/{item_id}")
 def read_item(item_id: int, q: typing.Union[str, None] = None):
     return {"item_id": item_id, "q": q}
