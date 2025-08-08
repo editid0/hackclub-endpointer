@@ -12,6 +12,9 @@ cursor.execute("""CREATE TABLE IF NOT EXISTS api_keys (key TEXT PRIMARY KEY)""")
 cursor.execute(
     """CREATE TABLE IF NOT EXISTS users (user_id TEXT PRIMARY KEY, name TEXT, meta TEXT, owner TEXT)"""
 )
+cursor.execute(
+    """CREATE TABLE IF NOT EXISTS balances(api_key TEXT, user_id TEXT, balance INTEGER)"""
+)
 conn.commit()
 
 
@@ -116,6 +119,19 @@ def get_user(
     if user is None:
         return {"error": "User not found"}, 404
     return {"user_id": user[0], "name": user[1], "meta": user[2]}
+
+
+@app.get("/balances")
+def get_balances(
+    request: Request,
+) -> typing.Union[list[dict[str, typing.Union[str, int]]], tuple[dict[str, str], int]]:
+    """This endpoint returns who owes who money, so if bob owes you like £50, it'll show bob £50, if you owe bob £40, it'll show bob -£40, if both, it'll show bob £10."""
+    api_key = get_key(request)
+    if not validate_key(api_key):
+        return {"error": "Invalid API key"}, 401
+    cursor.execute("SELECT * FROM balances WHERE api_key = ?", (api_key,))
+    balances = cursor.fetchall()
+    return [{"user_id": balance[1], "balance": balance[2]} for balance in balances]
 
 
 @app.get("/items/{item_id}")
