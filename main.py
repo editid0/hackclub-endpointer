@@ -60,7 +60,7 @@ def validate_api_key(api_key: str) -> dict[str, bool]:
 
 
 @app.post("/users")
-def create_user(
+def create_a_user(
     name: str,
     request: Request,
     meta: str = "",
@@ -92,7 +92,7 @@ def create_user(
 
 
 @app.get("/users")
-def get_users(
+def get_all_users_from_key(
     request: Request,
 ) -> typing.Union[typing.List[dict[str, typing.Any]], tuple[dict[str, str], int]]:
     """This endpoint returns a list of users."""
@@ -105,7 +105,7 @@ def get_users(
 
 
 @app.get("/users/{user_id}")
-def get_user(
+def get_specific_user(
     user_id: str, request: Request
 ) -> typing.Union[dict[str, typing.Any], tuple[dict[str, str], int]]:
     """This endpoint returns a user by user_id."""
@@ -122,7 +122,7 @@ def get_user(
 
 
 @app.put("/users/{user_id}")
-def update_user(
+def update_a_user(
     user_id: str,
     request: Request,
     name: typing.Optional[str] = None,
@@ -177,7 +177,7 @@ def update_user(
 
 
 @app.get("/balances")
-def get_balances(
+def get_api_key_balances(
     request: Request,
 ) -> typing.Union[list[dict[str, typing.Union[str, int]]], tuple[dict[str, str], int]]:
     """This endpoint returns who owes who money, so if bob owes you like £50, it'll show bob £50, if you owe bob £40, it'll show bob -£40, if both, it'll show both transactions."""
@@ -192,8 +192,8 @@ def get_balances(
     ]
 
 
-@app.post("/balance")
-def add_balance(
+@app.post("/balances")
+def add_a_balance(
     user_id: str,
     balance: int,
     request: Request,
@@ -211,7 +211,7 @@ def add_balance(
     return {"message": "Balance added successfully", "balance_id": balance_id}
 
 
-@app.get("/balance/{balance_id}")
+@app.get("/balances/{balance_id}")
 def get_a_balance(
     balance_id: str, request: Request
 ) -> typing.Union[dict[str, typing.Any], tuple[dict[str, str], int]]:
@@ -229,8 +229,8 @@ def get_a_balance(
     return {"user_id": balance[1], "balance": balance[2], "balance_id": balance[3]}
 
 
-@app.delete("/balance/{balance_id}")
-def delete_balance(
+@app.delete("/balances/{balance_id}")
+def delete_a_balance(
     balance_id: str, request: Request
 ) -> typing.Union[dict[str, str], tuple[dict[str, str], int]]:
     """This endpoint deletes a balance from the balance id."""
